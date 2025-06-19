@@ -87,4 +87,4 @@ uv run app.py
 Once both processes are running, open your web browser and navigate to:
 **[http://127.0.0.1:5001](http://127.0.0.1:5001)**
 
-- Try inputting a sample agent URL such as `https://sample-a2a-agent-908687846511.us-central1.run.app`
+- Enter the URL of your A2A server agent that needs to be tested.
