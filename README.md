@@ -106,7 +106,7 @@ docker build -t a2a-inspector .
 Once the image is built, run it as a container.
 
 ```sh
-#It will run the container in detached mode (in the background)
+# It will run the container in detached mode (in the background)
 docker run -d -p 8080:8080 a2a-inspector
 ```
 
