@@ -61,6 +61,7 @@ cd ..
 ### 3. Run the Application
 
 You can run the A2A Inspector in two ways. Choose the option that best fits your workflow:
+
 - Option 1 (Run Locally): Best for developers who are actively modifying the code. This method uses two separate terminal processes and provides live-reloading for both the frontend and backend.
 - Option 2 (Run with Docker): Best for quickly running the application without managing local Python and Node.js environments. Docker encapsulates all dependencies into a single container.
 
