@@ -115,7 +115,6 @@ docker run -d -p 8080:8080 a2a-inspector
 The container is now running in the background. Open your web browser and navigate to:
 **[http://127.0.0.1:8080](http://127.0.0.1:8080)**
 
-
 ### 4. Inspect your agents
 
 - Try inputting a sample agent URL such as `https://sample-a2a-agent-908687846511.us-central1.run.app`
