@@ -88,7 +88,7 @@ cd backend
 uv run app.py
 ```
 
-##### **Access the Inspector**:
+##### Access the Inspector
 
 Once both processes are running, open your web browser and navigate to:
 **[http://127.0.0.1:5001](http://127.0.0.1:5001)**
