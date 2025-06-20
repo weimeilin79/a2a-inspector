@@ -110,7 +110,7 @@ Once the image is built, run it as a container.
 docker run -d -p 8080:8080 a2a-inspector
 ```
 
-##### **Access the Inspector**:
+##### Access the Inspector
 
 The container is now running in the background. Open your web browser and navigate to:
 **[http://127.0.0.1:8080](http://127.0.0.1:8080)**
