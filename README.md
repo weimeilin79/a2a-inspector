@@ -94,7 +94,8 @@ Once both processes are running, open your web browser and navigate to:
 **[http://127.0.0.1:5001](http://127.0.0.1:5001)**
 
 
-#### Option Two: Run with Docker 
+#### Option Two: Run with Docker
+
 This approach builds the entire application into a single Docker image and runs it as a container. This is the simplest way to run the inspector if you have Docker installed and don't need to modify the code.
 
 From the root directory of the project, run the following command. This will build the frontend, copy the results into the backend, and package everything into an image named a2a-inspector.
