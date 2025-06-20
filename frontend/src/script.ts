@@ -21,6 +21,13 @@ interface DebugLog {
     id: string;
 }
 
+// Declare hljs global from CDN
+declare global {
+    interface Window {
+        hljs: any;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const socket = io();
 
@@ -28,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const agentUrlInput = document.getElementById('agent-url') as HTMLInputElement;
     const collapsibleHeader = document.querySelector('.collapsible-header') as HTMLElement;
     const collapsibleContent = document.querySelector('.collapsible-content') as HTMLElement;
-    const agentCardContent = document.getElementById('agent-card-content') as HTMLPreElement;
+    const agentCardCodeContent = document.getElementById('agent-card-content') as HTMLElement;
     const validationErrorsContainer = document.getElementById('validation-errors') as HTMLElement;
     const chatInput = document.getElementById('chat-input') as HTMLInputElement;
     const sendBtn = document.getElementById('send-btn') as HTMLButtonElement;
@@ -46,6 +53,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Renders basic Markdown elements (specifically bold with **) into HTML,
+     * while also escaping other HTML to prevent XSS.
+     * Also converts newline characters (\n) to <br> for line breaks.
+     * @param markdownText The text containing potential Markdown.
+     * @returns HTML string with Markdown rendered, newlines converted, and other HTML escaped.
+     */
+    function renderMarkdown(markdownText: string): string {
+        let result = '';
+        let lastIndex = 0;
+        // Regex to find **bolded text**: captures content inside asterisks in group 1
+        const regex = /\*\*(.*?)\*\*/g;
+        let match;
+
+        while ((match = regex.exec(markdownText)) !== null) {
+            result += escapeHtml(markdownText.substring(lastIndex, match.index));
+            result += `<strong>${escapeHtml(match[1])}</strong>`;
+            lastIndex = regex.lastIndex;
+        }
+
+        result += escapeHtml(markdownText.substring(lastIndex));
+
+        return result.replace(/\n/g, '<br>');
     }
 
     let isResizing = false;
@@ -111,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!url) { return alert('Please enter an agent URL.'); }
         if (!/^https?:\/\//i.test(url)) { url = 'http://' + url; }
 
-        agentCardContent.textContent = '';
+        agentCardCodeContent.textContent = '';
         validationErrorsContainer.innerHTML = '<p class="placeholder-text">Fetching Agent Card...</p>';
         chatInput.disabled = true;
         sendBtn.disabled = true;
@@ -125,7 +157,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (!response.ok) { throw new Error(data.error || `HTTP error! status: ${response.status}`); }
 
-            agentCardContent.textContent = JSON.stringify(data.card, null, 2);
+            agentCardCodeContent.textContent = JSON.stringify(data.card, null, 2);
+            if (window.hljs) {
+                window.hljs.highlightElement(agentCardCodeContent);
+            } else {
+                console.warn('highlight.js not loaded. Syntax highlighting skipped.');
+            }
+
             validationErrorsContainer.innerHTML = '<p class="placeholder-text">Initializing client session...</p>';
             socket.emit('initialize_client', { url: url });
 
@@ -136,6 +174,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             validationErrorsContainer.innerHTML = `<p style="color: red;">Error: ${(error as Error).message}</p>`;
+            chatInput.disabled = true;
+            sendBtn.disabled = true;
         }
     });
 
@@ -146,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chatMessages.innerHTML = '<p class="placeholder-text">Ready to chat.</p>';
             debugContent.innerHTML = '';
             Object.keys(rawLogStore).forEach(key => delete rawLogStore[key]);
+            Object.keys(messageJsonStore).forEach(key => delete messageJsonStore[key]);
         } else {
             validationErrorsContainer.innerHTML = `<p style="color: red;">Error initializing client: ${data.message}</p>`;
         }
@@ -155,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const messageText = chatInput.value;
         if (messageText.trim() && !chatInput.disabled) {
             const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            appendMessage('user', messageText, messageId);
+            appendMessage('user', messageText, messageId); 
             socket.emit('send_message', { message: messageText, id: messageId });
             chatInput.value = '';
         }
@@ -167,14 +208,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     socket.on('agent_response', (event: AgentResponseEvent) => {
-        const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        messageJsonStore[messageId] = event;
+        const displayMessageId = `display-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        messageJsonStore[displayMessageId] = event;
 
         const validationErrors = event.validation_errors || [];
 
         if (event.error) {
             const messageHtml = `<span class="kind-chip kind-chip-error">error</span> Error: ${escapeHtml(event.error)}`;
-            appendMessage('agent error', messageHtml, messageId, true, validationErrors);
+            appendMessage('agent error', messageHtml, displayMessageId, true, validationErrors);
             return;
         }
 
@@ -182,34 +223,37 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'task':
                 if (event.status) {
                     const messageHtml = `<span class="kind-chip kind-chip-task">${event.kind}</span> Task created with status: ${escapeHtml(event.status.state)}`;
-                    appendMessage('agent progress', messageHtml, messageId, true, validationErrors);
+                    appendMessage('agent progress', messageHtml, displayMessageId, true, validationErrors);
                 }
                 break;
             case 'status-update':
                 const statusText = event.status?.message?.parts?.[0]?.text;
                 if (statusText) {
-                    const messageHtml = `<span class="kind-chip kind-chip-status-update">${event.kind}</span> Server responded with: ${escapeHtml(statusText)}`;
-                    appendMessage('agent progress', messageHtml, messageId, true, validationErrors);
+                    const renderedContent = renderMarkdown(statusText);
+                    const messageHtml = `<span class="kind-chip kind-chip-status-update">${event.kind}</span> Server responded with: ${renderedContent}`;
+                    appendMessage('agent progress', messageHtml, displayMessageId, true, validationErrors);
                 }
                 break;
             case 'artifact-update':
                 event.artifact?.parts?.forEach(p => {
                     if ('text' in p && p.text) {
-                        const messageHtml = `<span class="kind-chip kind-chip-artifact-update">${event.kind}</span> ${escapeHtml(p.text)}`;
-                        appendMessage('agent', messageHtml, messageId, true, validationErrors);
+                        const renderedContent = renderMarkdown(p.text);
+                        const messageHtml = `<span class="kind-chip kind-chip-artifact-update">${event.kind}</span> ${renderedContent}`;
+                        appendMessage('agent', messageHtml, displayMessageId, true, validationErrors);
                     }
                     if ('file' in p && p.file) {
                         const { uri, mimeType } = p.file;
                         const messageHtml = `<span class="kind-chip kind-chip-artifact-update">${event.kind}</span> File received (${escapeHtml(mimeType)}): <a href="${uri}" target="_blank" rel="noopener noreferrer">Open Link</a>`;
-                        appendMessage('agent', messageHtml, messageId, true, validationErrors);
+                        appendMessage('agent', messageHtml, displayMessageId, true, validationErrors);
                     }
                 });
                 break;
             case 'message':
                 const textPart = event.parts?.find(p => p.text);
-                if (textPart) {
-                    const messageHtml = `<span class="kind-chip kind-chip-message">${event.kind}</span> ${escapeHtml(textPart.text)}`;
-                    appendMessage('agent', messageHtml, messageId, true, validationErrors);
+                if (textPart && textPart.text) { // Ensure textPart and textPart.text exist
+                    const renderedContent = renderMarkdown(textPart.text);
+                    const messageHtml = `<span class="kind-chip kind-chip-message">${event.kind}</span> ${renderedContent}`;
+                    appendMessage('agent', messageHtml, displayMessageId, true, validationErrors);
                 }
                 break;
         }
@@ -219,13 +263,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const logEntry = document.createElement('div');
         const timestamp = new Date().toLocaleTimeString();
         
+        let jsonString = JSON.stringify(log.data, null, 2);
+        jsonString = jsonString.replace(/"method": "([^"]+)"/g, '<span class="json-highlight">"method": "$1"</span>');
+
         logEntry.className = `log-entry log-${log.type}`;
         logEntry.innerHTML = `
             <div>
                 <span class="log-timestamp">${timestamp}</span>
                 <strong>${log.type.toUpperCase()}</strong>
             </div>
-            <pre>${JSON.stringify(log.data, null, 2)}</pre>
+            <pre>${jsonString}</pre>
         `;
         debugContent.appendChild(logEntry);
         
@@ -233,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rawLogStore[log.id] = {};
         }
         rawLogStore[log.id][log.type] = log.data;
+        debugContent.scrollTop = debugContent.scrollHeight;
     });
     
     function appendMessage(sender: string, content: string, messageId: string, isHtml: boolean = false, validationErrors: string[] = []) {
