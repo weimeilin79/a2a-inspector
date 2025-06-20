@@ -118,4 +118,4 @@ The container is now running in the background. Open your web browser and naviga
 
 ### 4. Inspect your agents
 
-- Enter the URL of your A2A server agent that needs to be tested.
+- Try inputting a sample agent URL such as `https://sample-a2a-agent-908687846511.us-central1.run.app`
