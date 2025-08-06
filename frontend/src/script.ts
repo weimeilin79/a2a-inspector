@@ -207,22 +207,41 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') sendMessage();
     });
 
+// In your frontend TypeScript file
+
     socket.on('agent_response', (event: AgentResponseEvent) => {
+        // This is the new property the backend is adding
+        const finalMessage = (event as any).final_message; 
+        
         const displayMessageId = `display-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         messageJsonStore[displayMessageId] = event;
 
         const validationErrors = event.validation_errors || [];
 
+        // --- START OF MODIFIED LOGIC ---
+
+        // Priority 1: If the backend found a definitive final message, show that.
+        if (finalMessage) {
+            const renderedContent = renderMarkdown(finalMessage);
+            const messageHtml = `<span class="kind-chip kind-chip-task">task</span> ${renderedContent}`;
+            appendMessage('agent', messageHtml, displayMessageId, true, validationErrors);
+            return; // We're done, no need to process other parts.
+        }
+
+        // Priority 2: If there's a direct error, show it.
         if (event.error) {
             const messageHtml = `<span class="kind-chip kind-chip-error">error</span> Error: ${escapeHtml(event.error)}`;
             appendMessage('agent error', messageHtml, displayMessageId, true, validationErrors);
             return;
         }
 
+        // Priority 3: Otherwise, handle progress updates and other event kinds as before.
         switch (event.kind) {
             case 'task':
+                // This now only shows for the very first "task created" event,
+                // not the final "completed" event if a final_message was found.
                 if (event.status) {
-                    const messageHtml = `<span class="kind-chip kind-chip-task">${event.kind}</span> Task created with status: ${escapeHtml(event.status.state)}`;
+                    const messageHtml = `<span class="kind-chip kind-chip-task">${event.kind}</span> Task status: ${escapeHtml(event.status.state)}`;
                     appendMessage('agent progress', messageHtml, displayMessageId, true, validationErrors);
                 }
                 break;
@@ -235,6 +254,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 break;
             case 'artifact-update':
+                // This case handles a specific 'artifact-update' event, which is different
+                // from the 'artifacts' array inside a 'task' event.
                 event.artifact?.parts?.forEach(p => {
                     if ('text' in p && p.text) {
                         const renderedContent = renderMarkdown(p.text);
@@ -250,15 +271,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'message':
                 const textPart = event.parts?.find(p => p.text);
-                if (textPart && textPart.text) { // Ensure textPart and textPart.text exist
+                if (textPart && textPart.text) {
                     const renderedContent = renderMarkdown(textPart.text);
                     const messageHtml = `<span class="kind-chip kind-chip-message">${event.kind}</span> ${renderedContent}`;
                     appendMessage('agent', messageHtml, displayMessageId, true, validationErrors);
                 }
                 break;
         }
+        // --- END OF MODIFIED LOGIC ---
     });
-
     socket.on('debug_log', (log: DebugLog) => {
         const logEntry = document.createElement('div');
         const timestamp = new Date().toLocaleTimeString();
